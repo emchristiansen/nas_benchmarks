@@ -1,23 +1,31 @@
-import os
 import json
+import os
+
+import ConfigSpace
 import h5py
 import numpy as np
-import ConfigSpace
 
 
-class FCNetYearPredictionBenchmark(object):
+class FCNetBenchmark(object):
 
-    def __init__(self, data_dir="./", seed=None):
+    def __init__(self, path, dataset="fcnet_protein_structure_data.hdf5", seed=None):
 
         cs = self.get_configuration_space()
         self.names = [h.name for h in cs.get_hyperparameters()]
 
-        self.data = h5py.File(os.path.join(data_dir, "fcnet_year_prediction_data.hdf5"), "r")
+        self.data = h5py.File(os.path.join(path, dataset), "r")
 
         self.X = []
         self.y = []
         self.c = []
 
+        self.rng = np.random.RandomState(seed)
+
+    def reset_tracker(self):
+        # __init__() sans the data loading for multiple runs
+        self.X = []
+        self.y = []
+        self.c = []
         self.rng = np.random.RandomState(seed)
 
     def get_best_configuration(self):
@@ -32,13 +40,15 @@ class FCNetYearPredictionBenchmark(object):
         for k in self.data.keys():
             configs.append(json.loads(k))
             te.append(np.mean(self.data[k]["final_test_error"]))
-            ve.append(np.mean(self.data[k]["valid_mae"][:, -1]))
+            ve.append(np.mean(self.data[k]["valid_mse"][:, -1]))
 
         b = np.argmin(te)
 
         return configs[b], ve[b], te[b]
 
     def objective_function(self, config, budget=100, **kwargs):
+
+        assert 0 < budget <= 100  # check whether budget is in the correct bounds
 
         i = self.rng.randint(4)
 
@@ -47,20 +57,22 @@ class FCNetYearPredictionBenchmark(object):
         else:
             k = json.dumps(config, sort_keys=True)
 
-        valid = self.data[k]["valid_mae"][i]
+        valid = self.data[k]["valid_mse"][i]
         runtime = self.data[k]["runtime"][i]
 
-        time_per_epoch = runtime / 100
+        time_per_epoch = runtime / 100  # divide by the maximum number of epochs
 
         rt = time_per_epoch * budget
 
         self.X.append(config)
-        self.y.append(np.mean(self.data[k]["valid_mae"][:, budget - 1]))
-        self.c.append(np.mean(self.data[k]["runtime"]) / 100 * budget)
+        self.y.append(valid[budget - 1])
+        self.c.append(rt)
 
         return valid[budget - 1], rt
 
     def objective_function_learning_curve(self, config, budget=100):
+
+        assert 0 < budget <= 100  # check whether budget is in the correct bounds
 
         index = self.rng.randint(4)
 
@@ -69,12 +81,12 @@ class FCNetYearPredictionBenchmark(object):
         else:
             k = json.dumps(config, sort_keys=True)
 
-        lc = [self.data[k]["valid_mae"][index][i] for i in range(budget)]
+        lc = [self.data[k]["valid_mse"][index][i] for i in range(budget)]
         runtime = self.data[k]["runtime"][index]
 
-        time_per_epoch = runtime / 100
+        time_per_epoch = runtime / 100 # divide by the maximum number of epochs
 
-        rt = [time_per_epoch * (i+1) for i in range(budget)]
+        rt = [time_per_epoch * (i + 1) for i in range(budget)]
 
         self.X.append(config)
         self.y.append(lc[-1])
@@ -84,15 +96,17 @@ class FCNetYearPredictionBenchmark(object):
 
     def objective_function_deterministic(self, config, budget=100, index=0, **kwargs):
 
+        assert 0 < budget <= 100  # check whether budget is in the correct bounds
+
         if type(config) == ConfigSpace.Configuration:
             k = json.dumps(config.get_dictionary(), sort_keys=True)
         else:
             k = json.dumps(config, sort_keys=True)
 
-        valid = self.data[k]["valid_mae"][index]
+        valid = self.data[k]["valid_mse"][index]
         runtime = self.data[k]["runtime"][index]
 
-        time_per_epoch = runtime / 100
+        time_per_epoch = runtime / 100 # divide by the maximum number of epochs
 
         rt = time_per_epoch * budget
 
@@ -159,3 +173,29 @@ class FCNetYearPredictionBenchmark(object):
         cs.add_hyperparameter(ConfigSpace.CategoricalHyperparameter("lr_schedule", ["cosine", "const"]))
         cs.add_hyperparameter(ConfigSpace.OrdinalHyperparameter("batch_size", [8, 16, 32, 64]))
         return cs
+
+
+class FCNetSliceLocalizationBenchmark(FCNetBenchmark):
+
+    def __init__(self, data_dir="./"):
+        super(FCNetSliceLocalizationBenchmark, self).__init__(path=data_dir,
+                                                              dataset="fcnet_slice_localization_data.hdf5")
+
+
+class FCNetProteinStructureBenchmark(FCNetBenchmark):
+
+    def __init__(self, data_dir="./"):
+        super(FCNetProteinStructureBenchmark, self).__init__(path=data_dir, dataset="fcnet_protein_structure_data.hdf5")
+
+
+class FCNetNavalPropulsionBenchmark(FCNetBenchmark):
+
+    def __init__(self, data_dir="./"):
+        super(FCNetNavalPropulsionBenchmark, self).__init__(path=data_dir, dataset="fcnet_naval_propulsion_data.hdf5")
+
+
+class FCNetParkinsonsTelemonitoringBenchmark(FCNetBenchmark):
+
+    def __init__(self, data_dir="./"):
+        super(FCNetParkinsonsTelemonitoringBenchmark, self).__init__(path=data_dir,
+                                                                     dataset="fcnet_parkinsons_telemonitoring_data.hdf5")

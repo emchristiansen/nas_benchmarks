@@ -1,39 +1,48 @@
-# Benchmarks for neural architecture search
+# Tabular Benchmarks for Hyperparameter Optimization and Neural Architecture Search
 
-Requires: TensorFlow 1.6 or later.
+This repository contains code of tabular benchmarks for
+ - HPOBench: joint hyperparameter and architecture optimization of feed forward neural networks on regression problems (see [1])
+ - NASBench101: the architecture optimization of a convolutional neural network (see [2])
+ 
 
-To train a WRN on CIFAR-10:
+To download the datasets for the FC-Net benchmark:
 
-    export PATH_TO_DATASET=...
-    export OUTPUT_DIR=...
+    wget http://ml4aad.org/wp-content/uploads/2019/01/fcnet_tabular_benchmarks.tar.gz
+    tar xf fcnet_tabular_benchmarks.tar.gz
+    
+The data for NASBench is available [here](https://github.com/google-research/nasbench).
 
-    bazel run wrn_cifar10:train -- \
-      --alsologtostderr \
-      --use_estimator_code_path \
-      --data_dir ${PATH_TO_DATASET}/cifar-10-batches-py/ \
-      --train_dir ${OUTPUT_DIR} \
-      --num_epochs 20 \
-      --lr_decay COSINE \
-      --initial_lr 0.1 \
-      --nodepthwise \
-      --num_residual_units_1 4 \
-      --num_residual_units_2 4 \
-      --num_residual_units_3 4 \
-      --n_filters_1 16 \
-      --n_filters_2 32 \
-      --n_filters_3 64 \
-      --stride_1 1 \
-      --stride_2 2 \
-      --stride_3 2
+To install it, type:
 
-Note, you can omit `--use_estimator_code_path` to use the original code path.
-Currently, the estimator path doesn't run evaluation metrics.
+    git clone https://github.com/automl/nas_benchmarks.git
+    cd nas_benchmarks
+    python setup.py install
+   
+ The following example shows how to load the benchmark and to evaluate a random hyperparameter configuration:
+  
+    from tabular_benchmarks import FCNetProteinStructureBenchmark
 
-The results (e.g learning curves) + test / validation predictions will be saved
-in `${OUTPUT_DIR}`.
+    b = FCNetProteinStructureBenchmark(data_dir="./fcnet_tabular_benchmarks/")
+    cs = b.get_configuration_space()
+    config = cs.sample_configuration()
 
-TODOs:
+    print("Numpy representation: ", config.get_array())
+    print("Dict representation: ", config.get_dictionary())
 
-1.  Move all code to use `tf.estimator.Estimator` and delete the old code path.
-1.  Make the checkpoints smaller. They're around 250 MB each currently.
-1.  Add a Beam script for parallel evaluation of the checkpoints.
+    max_epochs = 100
+    y, cost = b.objective_function(config, budget=max_epochs)
+    print(y, cost)
+    
+    
+To see how you can run different open-source optimizers from the literature, have a look on the python scripts in 'experiment_scripts' folder, which were also used to conducted the experiments in the papers.
+
+
+# References
+
+    [1] Tabular Benchmarks for Joint Architecture and Hyperparameter Optimization
+        A. Klein and F. Hutter
+        arXiv:1905.04970 [cs.LG]
+    
+    [2] NAS-Bench-101: Towards Reproducible Neural Architecture Search
+        C. Ying and A. Klein and E. Real and E. Christiansen and K. Murphy and F. Hutter
+        arXiv:1902.09635 [cs.LG]
